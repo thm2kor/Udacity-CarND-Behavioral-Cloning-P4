@@ -29,44 +29,27 @@ def get_lines ( path = path_data_folder ):
 
     return lines
 
-
-def load_data ( lines ):
-    # for each line in the lines, load the images and the steering label
-    # throttle and brake labels are not used
-    images = []
-    measurements = []
-    for line in lines:
-        source_path = line[0]
-        filename = source_path.split('/')[-1]
-        current_path = path_data_folder + 'IMG/' + filename
-        image = cv2.imread(current_path)
-        images.append(image)
-        measurement =float(line[3])
-        measurements.append(measurement)
-
-    return images, measurements
-
 def prepare_model():
     #prepare model based on NVIDIA paper https://arxiv.org/pdf/1604.07316.pdf
     #TODO : Dropout layers ??
     from keras.models import Sequential
-    from keras.layers import Input, Conv2D, Flatten, Dense, Dropout, Cropping2D,  Lambda
+    from keras.layers import Input, Conv2D, Flatten, Dense, Dropout, Lambda
     
 
     model = Sequential()
     model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(66, 200, 3)))
-    #model.add(Cropping2D(cropping=((70,25), (0,0)))) # ((top_crop, bottom_crop), (left_crop, right_crop))
     model.add(Conv2D(24, (5, 5), strides=(2, 2), padding='valid', activation = 'relu'))
     model.add(Conv2D(36, (5, 5), strides=(2, 2), padding='valid', activation = 'relu'))
     model.add(Conv2D(48, (5, 5), strides=(2, 2), padding='valid', activation = 'relu'))
     model.add(Conv2D(64, (3, 3), activation = 'relu'))
     model.add(Conv2D(64, (3, 3), activation = 'relu'))
-
+    model.add(Dropout(0.5))
     model.add(Flatten())
     model.add(Dense(100))
     model.add(Dense(50))
     model.add(Dense(10))
     model.add(Dense(1))
+
 
     return model
 
@@ -95,7 +78,7 @@ def generator(samples, batch_size=32):
                 # randomly select a camera position (left , center or right )
                 # load the respective picture and adjust the steering angle
                 # only for left and right. Center camera angle will not be adjusted.
-                angle_correction = 0.2
+                angle_correction = 0.1
                 camera_pos = random.randint(1,3)
                 if camera_pos == 1: # augment the steering angle as if the image is from the left camera
                     name = path_data_folder + 'IMG/' + batch_sample[1].split('/')[-1]
@@ -109,6 +92,15 @@ def generator(samples, batch_size=32):
                     name = path_data_folder + 'IMG/' + batch_sample[2].split('/')[-1]
                     image = pre_process (cv2.imread(name))
                     angle = float(batch_sample[3]) - angle_correction
+                
+                ## additional data augmentation
+                # mirror images with chance=0.5
+                if random.choice([True, False]):
+                    image = image[:, ::-1, :]
+                    angle *= -1.
+
+                # perturb slightly steering direction
+                angle += np.random.normal(loc=0, scale=0.1)
                 
                 images.append(image)
                 angles.append(angle)
