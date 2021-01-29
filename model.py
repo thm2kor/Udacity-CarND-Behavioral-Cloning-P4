@@ -7,7 +7,7 @@ import random
 #global parameters
 path_data_folder = './data/' ## <-- uses the old data in the opt folder
                              ##TODO Look for a better folder.
-batch_size = 64
+batch_size = 16
 
 def get_lines ( path = path_data_folder ):
     # Read the given file and return the lines as an array
@@ -43,7 +43,7 @@ def prepare_model():
     model.add(Conv2D(48, (5, 5), strides=(2, 2), padding='valid', activation = 'relu'))
     model.add(Conv2D(64, (3, 3), activation = 'relu'))
     model.add(Conv2D(64, (3, 3), activation = 'relu'))
-    model.add(Dropout(0.5))
+    #model.add(Dropout(0.5))
     model.add(Flatten())
     model.add(Dense(100))
     model.add(Dense(50))
@@ -78,7 +78,7 @@ def generator(samples, batch_size=32):
                 # randomly select a camera position (left , center or right )
                 # load the respective picture and adjust the steering angle
                 # only for left and right. Center camera angle will not be adjusted.
-                angle_correction = 0.1
+                angle_correction = 0.2
                 camera_pos = random.randint(1,3)
                 if camera_pos == 1: # augment the steering angle as if the image is from the left camera
                     name = path_data_folder + 'IMG/' + batch_sample[1].split('/')[-1]
@@ -95,12 +95,12 @@ def generator(samples, batch_size=32):
                 
                 ## additional data augmentation
                 # mirror images with chance=0.5
-                if random.choice([True, False]):
-                    image = image[:, ::-1, :]
-                    angle *= -1.
+                #if random.choice([True, False]):
+                #    image = image[:, ::-1, :]
+                #    angle *= -1.
 
                 # perturb slightly steering direction
-                angle += np.random.normal(loc=0, scale=0.1)
+                #angle += np.random.normal(loc=0, scale=0.1)
                 
                 images.append(image)
                 angles.append(angle)
@@ -109,7 +109,7 @@ def generator(samples, batch_size=32):
             # trim image to only see section with road
             X_train = np.array(images)
             y_train = np.array(angles)
-            yield shuffle(X_train, y_train)
+            yield X_train, y_train
 
 def main():
     lines = get_lines()
