@@ -2,11 +2,12 @@ import csv
 import cv2
 import numpy as np
 import math
+import random
 
 #global parameters
 path_data_folder = './data/' ## <-- uses the old data in the opt folder
                              ##TODO Look for a better folder.
-batch_size = 32
+batch_size = 64
 
 def get_lines ( path = path_data_folder ):
     # Read the given file and return the lines as an array
@@ -91,16 +92,32 @@ def generator(samples, batch_size=32):
             images = []
             angles = []
             for batch_sample in batch_samples:
-                name = path_data_folder + 'IMG/' + batch_sample[0].split('/')[-1]
-                center_image = pre_process (cv2.imread(name))
-                center_angle = float(batch_sample[3])
-                images.append(center_image)
-                angles.append(center_angle)
+                # randomly select a camera position (left , center or right )
+                # load the respective picture and adjust the steering angle
+                # only for left and right. Center camera angle will not be adjusted.
+                angle_correction = 0.2
+                camera_pos = random.randint(1,3)
+                if camera_pos == 1: # augment the steering angle as if the image is from the left camera
+                    name = path_data_folder + 'IMG/' + batch_sample[1].split('/')[-1]
+                    image = pre_process (cv2.imread(name))
+                    angle = float(batch_sample[3]) + angle_correction
+                elif camera_pos == 2: # No augmentation of steering angle
+                    name = path_data_folder + 'IMG/' + batch_sample[0].split('/')[-1]
+                    image = pre_process (cv2.imread(name))
+                    angle = float(batch_sample[3])
+                elif camera_pos == 3: # augment the steering angle as if the image is from the right camera
+                    name = path_data_folder + 'IMG/' + batch_sample[2].split('/')[-1]
+                    image = pre_process (cv2.imread(name))
+                    angle = float(batch_sample[3]) - angle_correction
+                
+                images.append(image)
+                angles.append(angle)
 
+                
             # trim image to only see section with road
             X_train = np.array(images)
             y_train = np.array(angles)
-            yield X_train, y_train
+            yield shuffle(X_train, y_train)
 
 def main():
     lines = get_lines()
@@ -125,14 +142,13 @@ def main():
     model = prepare_model()
     model.compile(loss='mse', optimizer='adam')
 
-    # callback to save the Keras model or model weights at some frequency.
-    checkpointer = ModelCheckpoint('checkpoints/weights.{epoch:02d}-{val_loss:.3f}.hdf5')
+    # callback to save the accuracy data in a log file
     logger = CSVLogger(filename='logs/logs.csv')
 
     # fit the model
     model.fit_generator(train_generator, steps_per_epoch=math.ceil(len(train_samples)/batch_size),
             validation_data=validation_generator, validation_steps=math.ceil(len(validation_samples)/batch_size),
-            epochs=8, verbose=1)
+            epochs=8, verbose=1, callbacks=[logger])
 
     model.summary()
     #Save the model
