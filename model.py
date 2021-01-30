@@ -19,8 +19,8 @@ col_pos_brake           = 5
 col_vehicle_speed       = 6
 
 # hyper parameters
-batch_size = 16
-epochs_count = 5
+batch_size = 32
+epochs_count = 2
 angle_correction = 0.2
 
 def save_histogram(train_data, title):
@@ -189,7 +189,7 @@ def generator(samples, batch_size=32):
             
 def main():
     """
-    main rou
+    main routine
     """
     lines = get_lines()
     print('Line count {:d}'.format(len(lines)))
