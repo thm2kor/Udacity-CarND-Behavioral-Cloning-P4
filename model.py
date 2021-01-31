@@ -20,8 +20,8 @@ col_vehicle_speed       = 6
 
 # hyper parameters
 batch_size = 32
-epochs_count = 2
-angle_correction = 0.2
+epochs_count = 5
+angle_correction = 0.15
 
 def plot_histogram(train_data, title):
     """
@@ -80,37 +80,37 @@ def prepare_model():
     #TODO : Investigate if Dropout layers are required
     """
     from keras.models import Sequential
-    from keras.layers import Input, Conv2D, Flatten, Dense, Dropout, ELU, Lambda
+    from keras.layers import Input, Conv2D, Flatten, Dense, Dropout, ReLU, Lambda
     #from keras.utils.vis_utils import plot_model
     model = Sequential()
     #Normalization
     model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(66, 200, 3)))
     # Conv Layer 1
     model.add(Conv2D(24, (5, 5), strides=(2, 2), padding='valid'))
-    model.add(ELU())
+    model.add(ReLU())
     # Conv Layer 2
     model.add(Conv2D(36, (5, 5), strides=(2, 2), padding='valid'))
-    model.add(ELU())
+    model.add(ReLU())
     # Conv Layer 3
     model.add(Conv2D(48, (5, 5), strides=(2, 2), padding='valid'))
-    model.add(ELU())
+    model.add(ReLU())
     # Conv Layer 4
     model.add(Conv2D(64, (3, 3)))
-    model.add(ELU())
+    model.add(ReLU())
     # Conv Layer 5
     model.add(Conv2D(64, (3, 3)))
-    model.add(ELU())
+    model.add(ReLU())
     
     model.add(Flatten())
     #FC Layer 1
     model.add(Dense(100))
-    model.add(ELU())
+    model.add(ReLU())
     #FC Layer 2
     model.add(Dense(50))
-    model.add(ELU())
+    model.add(ReLU())
     #FC Layer 3
     model.add(Dense(10))
-    model.add(ELU())
+    model.add(ReLU())
     #FC Layer 4
     model.add(Dense(1))
 
@@ -181,8 +181,8 @@ def get_all_views(images, angles, batch_sample):
     
 def generator(samples, batch_size=32):
     """
-    'coroutine for generating 'batch_size' of training samples
-    # code as provided in the class notes 'Generators' Project: Behavioral Cloining
+    - coroutine for generating 'batch_size' of training samples
+    - code based on class notes 'Generators' Project: Behavioral Cloining
     """
     from sklearn.utils import shuffle
     num_samples = len(samples)
@@ -241,7 +241,6 @@ def main():
     ## print the summary for documentation
     model.summary()
 
-    ## plot the training and validation loss for each epoch
     ## plot the training and validation loss for each epoch
     if debug_mode:
         plot_training_stats(history_object)
