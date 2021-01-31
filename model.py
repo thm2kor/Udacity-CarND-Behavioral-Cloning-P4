@@ -23,10 +23,10 @@ batch_size = 32
 epochs_count = 2
 angle_correction = 0.2
 
-def save_histogram(train_data, title):
+def plot_histogram(train_data, title):
     """
-    Histogram of the steering angle.
-    train_data is the lines array
+    Histogram of the steering angle. train_data is the lines array
+    The histogram is time-stamped and stored in the images folder
     """
     angles = np.float32(np.array(train_data)[:, 3])
     plt.title(title)
@@ -35,7 +35,23 @@ def save_histogram(train_data, title):
     plt.xlabel('Steering angle')
     filename = './images/histogram_{}.png'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
     plt.savefig(filename)
+    plt.close()
 
+def plot_training_stats(history_object):
+    """ 
+    Line graph showing the training and validation loss
+    The plot is timestamped and saved in the images folder
+    """
+    plt.plot(history_object.history['loss'])
+    plt.plot(history_object.history['val_loss'])
+    plt.title('Model Training Statistics')
+    plt.ylabel('Mean Squared Error loss')
+    plt.xlabel('Epoch')
+    plt.legend(['training set', 'validation set'], loc='upper right')
+    filename = './images/training_stats_{}.png'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
+    plt.savefig(filename)
+    plt.close()
+    
 def get_lines (path = path_data_folder):
     """
     Read the given file and return the lines as an array
@@ -199,7 +215,7 @@ def main():
     train_samples, validation_samples = train_test_split(lines, test_size=0.2)
     
     if debug_mode:
-        save_histogram(train_samples, 'Histogram - before Augmentation')
+        plot_histogram(train_samples, 'Histogram - before Augmentation')
        
     # call generator functions
     # compile and train the model using the generator functions
@@ -226,15 +242,10 @@ def main():
     model.summary()
 
     ## plot the training and validation loss for each epoch
-    plt.plot(history_object.history['loss'])
-    plt.plot(history_object.history['val_loss'])
-    plt.title('Model - mean squared error loss')
-    plt.ylabel('mean squared error loss')
-    plt.xlabel('epoch')
-    plt.legend(['training set', 'validation set'], loc='upper right')
-    filename = './images/training_stats_{:d}_epochs_{:d}.png'.format(batch_size, epochs_count)
-    plt.savefig(filename)
-
+    ## plot the training and validation loss for each epoch
+    if debug_mode:
+        plot_training_stats(history_object)
+        
     #Save the model
     filename = './models/model_{}.h5'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
     model.save(filename)
