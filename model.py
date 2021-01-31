@@ -9,7 +9,7 @@ from datetime import datetime
 #global application parameters
 path_data_folder = './data/' ## <-- uses the data provided by Udacity in the opt folder
 debug_mode = True
-
+distribution_correction = True
 col_path_image_center   = 0
 col_path_image_left     = 1
 col_path_image_right    = 2
@@ -21,21 +21,26 @@ col_vehicle_speed       = 6
 # hyper parameters
 batch_size = 32
 epochs_count = 5
+learning_rate = 0.001
 angle_correction = 0.15
 
-def plot_histogram(train_data, title):
+def plot_histogram(num_bins, angles, title):
     """
     Histogram of the steering angle. train_data is the lines array
     The histogram is time-stamped and stored in the images folder
     """
-    angles = np.float32(np.array(train_data)[:, 3])
     plt.title(title)
-    plt.hist(angles, 100)
-    plt.ylabel('Image count')
-    plt.xlabel('Steering angle')
+    
+    hist, bins = np.histogram(angles, num_bins)
+    width = (bins[1] - bins[0])*0.8
+    center = (bins[:-1] + bins[1:]) / 2
+    plt.bar(center, hist, align='center', width=width)
     filename = './images/histogram_{}.png'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
+    
     plt.savefig(filename)
     plt.close()
+    return hist, bins
+    
 
 def plot_training_stats(history_object):
     """ 
@@ -154,7 +159,7 @@ def get_all_views(images, angles, batch_sample):
     images.append(image)
     angles.append(angle)
     # flip the images with a -ve angle
-    images.append(cv2.flip(image,1))
+    images.append(np.fliplr(image))
     angles.append(-angle)
     
     ## add data of left camera
@@ -164,7 +169,7 @@ def get_all_views(images, angles, batch_sample):
     images.append(image)
     angles.append(angle)
     # flip the images with a -ve angle
-    images.append(cv2.flip(image,1))
+    images.append(np.fliplr(image))
     angles.append(-angle)
     
     ## add data of right camera
@@ -174,7 +179,7 @@ def get_all_views(images, angles, batch_sample):
     images.append(image)
     angles.append(angle)
     # flip the images with a -ve angle
-    images.append(cv2.flip(image,1))
+    images.append(np.fliplr(image))
     angles.append(-angle)
     
     return images, angles
@@ -203,6 +208,30 @@ def generator(samples, batch_size=32):
             y_train = np.array(angles)
             yield shuffle(X_train, y_train)
             
+def correct_distribution (lines):
+    # check current distribution
+    angles = np.float32(np.array(lines)[:, 3])
+    num_bins = 21
+    
+    hist, bins = plot_histogram( num_bins, angles, 'Histogram - before distribution correction')
+    #correct the distribution
+    ideal_samples = len(angles)/num_bins * 1.25
+        
+    keep_prob = [1 if hist[i] < ideal_samples else ideal_samples/hist[i] for i in range(num_bins) ]
+    remove_list = []
+
+    for x, y in ((i,j) for i in range(len(angles)) for j in range(num_bins)):
+        if angles[x] > bins[y] and angles[x] <= bins[y+1]:
+            if np.random.rand() > keep_prob[y]:
+                remove_list.append(x)
+    
+    lines = np.delete(lines, remove_list, axis=0)  
+    # check if distribution is ok  
+    angles = np.float32(np.array(lines)[:, 3])
+    hist = plot_histogram(num_bins , angles, 'Histogram - after distribution correction')
+    
+    return lines
+    
 def main():
     """
     main routine
@@ -210,21 +239,25 @@ def main():
     lines = get_lines()
     print('Line count {:d}'.format(len(lines)))
 
+    if distribution_correction:
+        lines = correct_distribution ( lines )
+        print('Lines after distribution correction {:d}'.format(len(lines)))
+
     # prepare the training and validation samples
     from sklearn.model_selection import train_test_split
     train_samples, validation_samples = train_test_split(lines, test_size=0.2)
-    
-    if debug_mode:
-        plot_histogram(train_samples, 'Histogram - before Augmentation')
-       
+        
+    #return 
+
     # call generator functions
     # compile and train the model using the generator functions
     train_generator = generator(train_samples, batch_size=batch_size)
     validation_generator = generator(validation_samples, batch_size=batch_size)
 
     ## Prepare the model
+    from keras.optimizers import Adam
     model = prepare_model()
-    model.compile(loss='mse', optimizer='adam')
+    model.compile(loss='mse', optimizer=Adam(lr=learning_rate))
 
     # callback to save the accuracy and checkpoints data in a log file
     # TODO: Try Tensorboard to show the statistics
