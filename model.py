@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 from math import ceil
 from datetime import datetime
 
-#global application parameters
-path_data_folder = './data/' ## <-- uses the data provided by Udacity in the opt folder
-debug_mode = True
+# global application parameters
+# List of folders where data is stored
+path_data_folders = ['./data/', './dataset/data/']
+# Flag to balance the distribution
 distribution_correction = True
+# Column index in the CSV file
 col_path_image_center   = 0
 col_path_image_left     = 1
 col_path_image_right    = 2
@@ -19,14 +21,14 @@ col_pos_brake           = 5
 col_vehicle_speed       = 6
 
 # hyper parameters
-batch_size = 32
-epochs_count = 5
-learning_rate = 0.001
-angle_correction = 0.15
+batch_size              = 32
+epochs_count            = 5
+learning_rate           = 0.0001
+angle_correction        = 0.15 # correction angle for the left and right cameras
 
 def plot_histogram(num_bins, angles, title):
     """
-    Histogram of the steering angle. train_data is the lines array
+    Histogram of the steering angles. train_data is the lines array
     The histogram is time-stamped and stored in the images folder
     """
     plt.title(title)
@@ -35,7 +37,7 @@ def plot_histogram(num_bins, angles, title):
     width = (bins[1] - bins[0])*0.8
     center = (bins[:-1] + bins[1:]) / 2
     plt.bar(center, hist, align='center', width=width)
-    filename = './images/histogram_{}.png'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
+    filename = './images/histogram_{}.png'.format(datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
     
     plt.savefig(filename)
     plt.close()
@@ -53,11 +55,11 @@ def plot_training_stats(history_object):
     plt.ylabel('Mean Squared Error loss')
     plt.xlabel('Epoch')
     plt.legend(['training set', 'validation set'], loc='upper right')
-    filename = './images/training_stats_{}.png'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
+    filename = './images/training_stats_{}.png'.format(datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
     plt.savefig(filename)
     plt.close()
     
-def get_lines (path = path_data_folder):
+def get_lines (path = path_data_folders):
     """
     Read the given file and return the lines as an array
     """
@@ -69,13 +71,17 @@ def get_lines (path = path_data_folder):
     # line[3] - float value of 'steering angle'
     # line[4] - float value of 'braking'
     # line[5] - float value of 'throttle'
-    #open csv database
-    with open(path_data_folder +'driving_log.csv') as csvfile:
-        #skip header
-        next(csvfile)
-        reader =csv.reader(csvfile)
-        for line in reader:
-            lines.append(line)
+    for i in range(len(path_data_folders)):
+        with open(path_data_folders[i] +'driving_log.csv') as csvfile:
+            #skip header
+            next(csvfile)
+            reader =csv.reader(csvfile)
+            for path_center, path_left, path_right, angle, throttle, brake, speed in reader:
+                line = [path_data_folders[i] + path_center.strip(), 
+                        path_data_folders[i] + path_left.strip(), 
+                    path_data_folders[i] + path_right.strip(), angle.strip(), throttle, brake, speed ]
+           
+                lines.append(line)
 
     return lines
 
@@ -85,25 +91,25 @@ def prepare_model():
     #TODO : Investigate if Dropout layers are required
     """
     from keras.models import Sequential
-    from keras.layers import Input, Conv2D, Flatten, Dense, Dropout, ReLU, Lambda
+    from keras.layers import Input, Conv2D, Flatten, Dense, Dropout, ReLU, ELU, Lambda
     #from keras.utils.vis_utils import plot_model
     model = Sequential()
     #Normalization
     model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(66, 200, 3)))
     # Conv Layer 1
-    model.add(Conv2D(24, (5, 5), strides=(2, 2), padding='valid'))
+    model.add(Conv2D(24, (5, 5), strides=(2, 2), padding='valid', kernel_initializer='he_uniform'))
     model.add(ReLU())
     # Conv Layer 2
-    model.add(Conv2D(36, (5, 5), strides=(2, 2), padding='valid'))
+    model.add(Conv2D(36, (5, 5), strides=(2, 2), padding='valid', kernel_initializer='he_uniform'))
     model.add(ReLU())
     # Conv Layer 3
-    model.add(Conv2D(48, (5, 5), strides=(2, 2), padding='valid'))
+    model.add(Conv2D(48, (5, 5), strides=(2, 2), padding='valid', kernel_initializer='he_uniform'))
     model.add(ReLU())
     # Conv Layer 4
-    model.add(Conv2D(64, (3, 3)))
+    model.add(Conv2D(64, (3, 3), kernel_initializer='he_uniform'))
     model.add(ReLU())
     # Conv Layer 5
-    model.add(Conv2D(64, (3, 3)))
+    model.add(Conv2D(64, (3, 3), kernel_initializer='he_uniform'))
     model.add(ReLU())
     
     model.add(Flatten())
@@ -136,17 +142,18 @@ def pre_process(image):
     # resize image to fit the input shape of the model
     result = cv2.resize(result, dsize=(200, 66))
     # return the result compatible to the nvidia model
+    result = cv2.cvtColor(result, cv2.COLOR_BGR2YUV)
     return result.astype('float32')
 
-def get_image(relative_path):
+def get_image(image_path):
     """
     load the image from the given relative path
     """
-    result = cv2.imread(path_data_folder + relative_path.strip())
+    result = cv2.imread(image_path.strip())
     result = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
     return result
 
-def get_all_views(images, angles, batch_sample):
+def augument_images(images, angles, batch_sample):
     """
     for the line (batch sample) load the center, left
     and right images. Flip each of them.
@@ -201,7 +208,7 @@ def generator(samples, batch_size=32):
 
             for batch_sample in batch_samples:
                 # for every lines, 3 images * 2 (flipped) = 6 images will be returned
-                images, angles = get_all_views (images, angles, batch_sample)
+                images, angles = augument_images (images, angles, batch_sample)
                 
             # trim image to only see section with road
             X_train = np.array(images)
@@ -209,13 +216,17 @@ def generator(samples, batch_size=32):
             yield shuffle(X_train, y_train)
             
 def correct_distribution (lines):
-    # check current distribution
+    """
+    Balance the distribution of angles
+    Define an ideal value of samples per bin. If the count per bin is greated
+    than the the average, then randomly remove the items only for that bin
+    """
     angles = np.float32(np.array(lines)[:, 3])
-    num_bins = 21
+    num_bins = 25
     
     hist, bins = plot_histogram( num_bins, angles, 'Histogram - before distribution correction')
     #correct the distribution
-    ideal_samples = len(angles)/num_bins * 1.25
+    ideal_samples = len(angles)/num_bins * 1.5
         
     keep_prob = [1 if hist[i] < ideal_samples else ideal_samples/hist[i] for i in range(num_bins) ]
     remove_list = []
@@ -247,8 +258,6 @@ def main():
     from sklearn.model_selection import train_test_split
     train_samples, validation_samples = train_test_split(lines, test_size=0.2)
         
-    #return 
-
     # call generator functions
     # compile and train the model using the generator functions
     train_generator = generator(train_samples, batch_size=batch_size)
@@ -275,13 +284,16 @@ def main():
     model.summary()
 
     ## plot the training and validation loss for each epoch
-    if debug_mode:
-        plot_training_stats(history_object)
+    plot_training_stats(history_object)
         
     #Save the model
     filename = './models/model_{}.h5'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
     model.save(filename)
     print ('Model created at :' + filename)
-
+    
+    # End tensorflow session
+    from keras import backend as K 
+    K.clear_session()
+    
 if __name__ == '__main__':
     main()
