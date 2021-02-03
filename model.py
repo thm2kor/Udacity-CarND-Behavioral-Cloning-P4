@@ -1,5 +1,6 @@
 import csv
 import cv2
+import argparse
 import numpy as np
 import random
 import matplotlib.pyplot as plt
@@ -7,10 +8,14 @@ from math import ceil
 from datetime import datetime
 
 # global application parameters
+
 # List of folders where data is stored
-path_data_folders = ['./data/', './dataset/data/']
+path_append_root = [True, True, True] # default data set has relativ path, own dataset has full paths
+path_data_folders = ['./data/', './dataset_t2_stage1/data/', './dataset_t2_stage2/data/'] ## Additonal paths can also be appended via command line --data
+
 # Flag to balance the distribution
-distribution_correction = True
+distribution_correction = False ## Can be set via program argument --trim_straight 
+
 # Column index in the CSV file
 col_path_image_center   = 0
 col_path_image_left     = 1
@@ -21,9 +26,9 @@ col_pos_brake           = 5
 col_vehicle_speed       = 6
 
 # hyper parameters
-batch_size              = 32
-epochs_count            = 5
-learning_rate           = 0.0001
+batch_size              = 32 ## Can be set via program argument -- batch
+epochs_count            = 3 ## Can be set via program argument -- epochs
+learning_rate           = 0.0001 ## Can be set via program argument -- lr
 angle_correction        = 0.15 # correction angle for the left and right cameras
 
 def plot_histogram(num_bins, angles, title):
@@ -71,24 +76,40 @@ def get_lines (path = path_data_folders):
     # line[3] - float value of 'steering angle'
     # line[4] - float value of 'braking'
     # line[5] - float value of 'throttle'
-    for i in range(len(path_data_folders)):
+    for i in range(len(path_data_folders)):        
         with open(path_data_folders[i] +'driving_log.csv') as csvfile:
+            print ('Loading data from {} ...'.format(path_data_folders[i] +'driving_log.csv'))
             #skip header
             next(csvfile)
             reader =csv.reader(csvfile)
             for path_center, path_left, path_right, angle, throttle, brake, speed in reader:
-                line = [path_data_folders[i] + path_center.strip(), 
-                        path_data_folders[i] + path_left.strip(), 
-                    path_data_folders[i] + path_right.strip(), angle.strip(), throttle, brake, speed ]
+                if path_append_root[i]:
+                    path_center = path_data_folders[i] + path_center.strip()
+                    path_left = path_data_folders[i] + path_left.strip()
+                    path_right = path_data_folders[i] + path_right.strip()
+                line = [ path_center.strip(), path_left.strip(), path_right.strip(), angle.strip(), throttle, brake, speed ]
            
                 lines.append(line)
 
     return lines
 
+# https://chatbotslife.com/using-augmentation-to-mimic-human-driving-496b569760a9#.yh93soib0
+def jitter_image_rotation(image, steering):
+    rows, cols, _ = image.shape
+    transRange = 100
+    numPixels = 10
+    valPixels = 0.4
+    transX = transRange * np.random.uniform() - transRange/2
+    steering = steering + transX/transRange * 2 * valPixels
+    transY = numPixels * np.random.uniform() - numPixels/2
+    transMat = np.float32([[1, 0, transX], [0, 1, transY]])
+    image = cv2.warpAffine(image, transMat, (cols, rows))
+    return image, steering
+
+
 def prepare_model():
     """
     prepare model based on NVIDIA paper https://arxiv.org/pdf/1604.07316.pdf
-    #TODO : Investigate if Dropout layers are required
     """
     from keras.models import Sequential
     from keras.layers import Input, Conv2D, Flatten, Dense, Dropout, ReLU, ELU, Lambda
@@ -113,9 +134,15 @@ def prepare_model():
     model.add(ReLU())
     
     model.add(Flatten())
+    # dense 1164
+    model.add(Dense(1164))
+    model.add(ReLU())
+    model.add(Dropout(0.5)) 
+
     #FC Layer 1
     model.add(Dense(100))
     model.add(ReLU())
+    model.add(Dropout(0.5)) 
     #FC Layer 2
     model.add(Dense(50))
     model.add(ReLU())
@@ -147,8 +174,9 @@ def pre_process(image):
 
 def get_image(image_path):
     """
-    load the image from the given relative path
+    load the image from the given path
     """
+    #print (image_path)
     result = cv2.imread(image_path.strip())
     result = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
     return result
@@ -247,9 +275,11 @@ def main():
     """
     main routine
     """
+    print('Training with Batch size of {:d}, Epoch count of {:d}, Learning rate of {:.2e} and Distribution correction set to {}' .format(batch_size, epochs_count, learning_rate, distribution_correction ))
+    
     lines = get_lines()
     print('Line count {:d}'.format(len(lines)))
-
+     
     if distribution_correction:
         lines = correct_distribution ( lines )
         print('Lines after distribution correction {:d}'.format(len(lines)))
@@ -257,7 +287,10 @@ def main():
     # prepare the training and validation samples
     from sklearn.model_selection import train_test_split
     train_samples, validation_samples = train_test_split(lines, test_size=0.2)
-        
+    
+    print('Training samples after splitting {:d}'.format(len(train_samples)))
+    print('Training samples after splitting {:d}'.format(len(validation_samples)))
+    
     # call generator functions
     # compile and train the model using the generator functions
     train_generator = generator(train_samples, batch_size=batch_size)
@@ -291,9 +324,37 @@ def main():
     model.save(filename)
     print ('Model created at :' + filename)
     
+    ############## Validation steps . Only for debugging ###############
+    # for line in lines:
+    #    image = pre_process(get_image(line[0]))
+    #    steering_angle_pred = float(model.predict(image[None, :, :, :], batch_size=1))
+    #    print (steering_angle_pred) 
+    ############## Validation steps . Only for debugging ###############
+    
     # End tensorflow session
     from keras import backend as K 
     K.clear_session()
     
 if __name__ == '__main__':
+    # Read the program arguments and prepare the global parameters
+    parser = argparse.ArgumentParser(description='Model trainer')
+    parser.add_argument('--batch', type=int, default=32, help='Batch size.')
+    parser.add_argument('--epochs', type=int, default=5, help='Number of epochs.')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate.')
+    parser.add_argument('--trim_straight', dest='trim_straight', action='store_true', help='Skip distribution correction')
+    parser.add_argument('--data', dest='data_paths', action='append', help='Path to the data files')
+
+    parser.set_defaults(trim_straight=False)
+    args = parser.parse_args()
+
+    batch_size = args.batch
+    epochs_count = args.epochs
+    learning_rate = args.lr
+    distribution_correction = args.trim_straight
+    if args.data_paths:
+        for path in args.data_paths:
+            path_append_root.append (False) # Latest simulator version have full paths
+            path_data_folders.append (path)
+
+    # Call main function
     main()
