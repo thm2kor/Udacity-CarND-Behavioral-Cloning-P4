@@ -10,8 +10,10 @@ from datetime import datetime
 # global application parameters
 
 # List of folders where data is stored
-path_append_root = [True, True, True] # default data set has relativ path, own dataset has full paths
-path_data_folders = ['./data/', './dataset_t2_stage1/data/', './dataset_t2_stage2/data/'] ## Additonal paths can also be appended via command line --data
+path_append_root = [True, True, False, False, False, False] # default data set has relativ path, own dataset has full paths
+path_data_folders = ['./data/', './dataset_track1_2_mixed/', './dataset_t2_stage1/', 
+                     './dataset_t2_stage2/', './dataset_t2_stage3/', './dataset_t2_stage4/'] 
+## Additonal paths can also be appended via command line --data
 
 # Flag to balance the distribution
 distribution_correction = False ## Can be set via program argument --trim_straight 
@@ -93,20 +95,6 @@ def get_lines (path = path_data_folders):
 
     return lines
 
-# https://chatbotslife.com/using-augmentation-to-mimic-human-driving-496b569760a9#.yh93soib0
-def jitter_image_rotation(image, steering):
-    rows, cols, _ = image.shape
-    transRange = 100
-    numPixels = 10
-    valPixels = 0.4
-    transX = transRange * np.random.uniform() - transRange/2
-    steering = steering + transX/transRange * 2 * valPixels
-    transY = numPixels * np.random.uniform() - numPixels/2
-    transMat = np.float32([[1, 0, transX], [0, 1, transY]])
-    image = cv2.warpAffine(image, transMat, (cols, rows))
-    return image, steering
-
-
 def prepare_model():
     """
     prepare model based on NVIDIA paper https://arxiv.org/pdf/1604.07316.pdf
@@ -139,17 +127,15 @@ def prepare_model():
     model.add(ReLU())
     model.add(Dropout(0.5)) 
 
-    #FC Layer 1
     model.add(Dense(100))
     model.add(ReLU())
     model.add(Dropout(0.5)) 
-    #FC Layer 2
+
     model.add(Dense(50))
     model.add(ReLU())
-    #FC Layer 3
+    
     model.add(Dense(10))
     model.add(ReLU())
-    #FC Layer 4
     model.add(Dense(1))
 
     #plot_model(model, to_file='.\images\model.png')
@@ -176,7 +162,6 @@ def get_image(image_path):
     """
     load the image from the given path
     """
-    #print (image_path)
     result = cv2.imread(image_path.strip())
     result = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
     return result
