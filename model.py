@@ -10,9 +10,14 @@ from datetime import datetime
 # global application parameters
 
 # List of folders where data is stored
-path_append_root = [True, True, False, False, False, False] # default data set has relativ path, own dataset has full paths
-path_data_folders = ['./data/', './dataset_track1_2_mixed/', './dataset_t2_stage1/', 
-                     './dataset_t2_stage2/', './dataset_t2_stage3/', './dataset_t2_stage4/'] 
+# path_append_root = [True, True, False, False, False, False] 
+# default data set has relativ path, own dataset has full paths
+path_append_root = [True]
+# Minimal dataset for the model
+path_data_folders = ['./data/']
+# Additional dataset for generalising track 1 and track 2
+#  path_data_folders = ['./data/', './dataset_track1_2_mixed/', './dataset_t2_stage1/', 
+#                     './dataset_t2_stage2/', './dataset_t2_stage3/', './dataset_t2_stage4/'] 
 ## Additonal paths can also be appended via command line --data
 
 # Flag to balance the distribution
