@@ -10,7 +10,8 @@
 [image2]: ./images/histogram_20210203-132347-721190.png "steering angle distribution after distribution correction"
 [image3]: ./images/carnd-using-multiple-cameras.png "multiple cameras"
 [image4]: ./images/training_stats_20210203-143847-243593.png "accuracy"
-
+[image5]: ./images/sample_augmented_image.png "image augmentation"
+[image6]: ./images/sample_preprocessing.png "image preprocessing"
 Overview
 ---
 The objective of this project is to clone a driving behavior of a human driver by training a deep neural network to model the steering angle of a car for a given driving situation, which enables a car to drive autonomously. Udacity provided a [simulator](https://github.com/udacity/self-driving-car-sim) which supports two modes:
@@ -100,11 +101,11 @@ image_array = pre_process(image_array)
 
 ## Training Strategy
 - Udacity provided a [default dataset](https://d17h27t6h515a5.cloudfront.net/topher/2016/December/584f6edd_data/data.zip) which is taken as the starting point for training the model. It contained **8036** lines of data covering all possible driving scenarios on the Track-1.
-- Based on the project instructions and an interesting [discussion note](https://s3-us-west-1.amazonaws.com/udacity-selfdrivingcar/Behavioral+Cloning+Cheatsheet+-+CarND.pdf) from Pauly Heraty, NVIDIA model was chosen as the starting point for the network model.
-- Without dropout layers and a leaner version of NVIDIA model (a normalization layer, 5 convolutional layers, and 3 fully-connected layers), Track-1 was successfully driven. To ensure that the model is generalized well enough, it is expected that the car should negotiate at least some part of Track-2. But the car could not negotiate the first ramp. It was clear that the network was not trained for the new features like new landscape, varying slope, and shorter radius of curvature of Track-2.
+- Based on the project instructions and an interesting [discussion note](https://s3-us-west-1.amazonaws.com/udacity-selfdrivingcar/Behavioral+Cloning+Cheatsheet+-+CarND.pdf) from Pauly Heraty, [NVIDIA model](https://arxiv.org/pdf/1604.07316.pdf) was chosen as the starting point for the network model.
+- Without dropout layers and a slightly adapted version of NVIDIA model (a normalization layer, 5 convolutional layers, and 4 fully-connected layers), Track-1 was successfully driven. To ensure that the model is generalized well enough, it is expected that the car should negotiate at least some part of Track-2. But the car could not negotiate even the first ramp. It was clear that the network was not trained for the new features like new landscape, varying slope, and shorter radius of curvature of Track-2.
 - New training data was derived by running the simulator in training mode. Instead of large training datasets covering the entire track, shorter tracks were trained and added to the default dataset. Since it was advised not to store the data in the project workspace, the additional data is archived [here](https://github.com/thm2kor/Udacity-CarND-Behavioral-Cloning-P4/tree/main/training).
 - Based on the actual performance in the autonomous mode, the network had to be expanded with an additional fully connected layer, 2 dropout layers and a shorter learning rate.
-- The Track-1 was successfully run, but due to the fact that the Track 2 was too complicated to train with my keyboard, I did not completely train the Track 2. But my method of training in stages is a scalable solution.
+- The Track-1 was successfully run, but due to the fact that the Track-2 was too complicated to train with my keyboard, I did not completely train the Track-2. But my method of training in stages is a scalable solution.
 - As summary, the amount and diversity of training data was the most influencing factor when it comes to generalization of the network. Tuning of model parameters had little impact on the overall performance, but it is all about data.
 
 ## Data Analysis
@@ -127,21 +128,43 @@ A quick look at the plot shows that the steering angles corresponding to straigh
 - The distribution of steering angles after distribution correction is shown below
 ![steering angle distribution after augmentation][image2]
 
-*The performance after distribution correction did not show any performance for a wide range of ideal count of bins.* Therefore, this feature was **disabled**. Performance improvement was seen after artificially increasing the data count using data augmentation.
+*The performance after distribution correction did not show any performance improvement for a wide range of ideal count of bins.* Therefore, this feature was **disabled**. But, Performance improvement was seen after artificially increasing the data count using data augmentation.
 
 #### Augmentation
-The data provided by Udacity contains only steering angles for the center image.In order to effectively use the left and right images during training, an **offset of 0.15 to the left images and subtracted 0.15 from the right images** was added.
-![camera-positions][image3]
-The offset of 0.15 was derived based on trial-and-error method. With higher offset values (0.2 to 0.4), though the performance was good around the curves, the car wobbles more during straight line drive.
+The data provided by Udacity contains only steering angles for the center image. In order to effectively use the left and right images during training, an **offset of 0.15 is added to the left camera images and subtracted 0.15 from the right camera images** was added. The offset of 0.15 was derived based on trial-and-error method. With higher offset values (0.2 to 0.4), though the performance was good around the curves, the car wobbles more during straight line drive.
 In addition, the images are flipped about their vertical axis with a negative steering angle. This would reduce the bias of left turns or right turns.
 ```python
 # flip the images with a -ve angle
 images.append(np.fliplr(image))
 angles.append(-angle)
 ```
+A set of augmented images for a sample image is shown below:
+
+![augmented_images][image5]
+
+### Pre-processing
+The following steps are performed on the images to efficiently train the model.
+1. The top portion of the images (approx. 140 pixels high) does not have any features which are necessary for the estimating the steering angle. Similarly the bottom frames (approx. 20 pixels high) of all the images capture the car hood, which again is not relevant for steering angle calculation. Both these portion of the images were cropped.
+2. NVIDIA model expects the input shape of the image to be 3x66x200. The images are resized to the target shape.
+3. Similar to the NVIDIA network architecture, the input image is converted to YUV color space.
+
+```python
+def pre_process(image):
+    # crop the unwanted portions of the image
+    result = image[range(20, 140), :, :]
+    # resize image to fit the input shape of the model
+    result = cv2.resize(result, dsize=(200, 66))
+    # return the result compatible to the nvidia model
+    result = cv2.cvtColor(result, cv2.COLOR_BGR2YUV)
+    return result.astype('float32')
+```
+
+The following set of images shows the effect of pre-processing on the images before they are fed to the model.
+![preprocessed_images][image6]
+
 ### Network Architecture
 
-#### Data normalization
+#### Normalization
 For a faster convergence of a neural network, the images needs to be normalized. The images are normalized in the first layer of the model where the RGB values are scaled to be between -1.0 and 1.0.
 ```python
 model = Sequential()
@@ -149,7 +172,7 @@ model = Sequential()
 model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(66, 200, 3)))
 ```
 #### Model
-The network starts with a normalization layer followed by 5 convolutional layers.The first convolutional layer accepts an input of 3x66x200, has a filter of size 5x5 and stride of 2x2, resulting in output of 24x31x98. The second convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in and output of 36x14x47. The third convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in output of 48x5x22. The fourth convolutional layer applies a filter of 3x3 with stride of 1x1 (no stride), resulting in output of 64x3x20. The fifth and final convolutional layer then applies a filter of 3x3 with no stride, resulting in output of 64x1x18. The output is then flattened to produce a layer of 1152 neurons. The first fully-connected layer then results in output of 1164 neurons, followed by 100 neurons, 50 neurons, 10 neurons, and finally produces an output representing the steering angle. Two dropout layers with 50% probability is added after the first and second fully connected layers to avoid overfitting of the model.
+The network starts with a normalization layer followed by 5 convolutional layers. The first convolutional layer accepts an input of 3x66x200, has a filter of size 5x5 and stride of 2x2, resulting in output of 24x31x98. The second convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in and output of 36x14x47. The third convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in output of 48x5x22. The fourth convolutional layer applies a filter of 3x3 with stride of 1x1 (no stride), resulting in output of 64x3x20. The fifth and final convolutional layer then applies a filter of 3x3 with no stride, resulting in output of 64x1x18. The output is then flattened to produce a layer of 1152 neurons. The first fully-connected layer then results in output of 1164 neurons, followed by 100 neurons, 50 neurons, 10 neurons, and finally produces an output representing the steering angle. Two dropout layers with 50% probability is added after the first and second fully connected layers to avoid overfitting of the model.
 
 The model can be summarized as below:
 
@@ -162,26 +185,26 @@ The model can be summarized as below:
 | 4th Convolutional/ReLU  | (3,3)  | (1,1)   | (3, 20, 64)   |     27,712   |
 | 5th Convolutional/ReLU  | (3,3)  | (1,1)   | (1, 18, 64)   |     36,928   |
 | Flatten                 |        |         | (1152)        |          0   |
-| 1st Fully Connected     |        |         | (1164)        |  1,342,092   |
+| 1st Fully Connected/ReLU|        |         | (1164)        |  1,342,092   |
 | Dropout                 |        |         | (1164)        |          0   |
-| 2nd Fully Connected     |        |         | (100)         |    116,500   |
+| 2nd Fully Connected/ReLU|        |         | (100)         |    116,500   |
 | Dropout                 |        |         | (100)         |          0   |
-| 3rd Fully Connected     |        |         | (50)          |       5050   |
-| 4th Fully Connected     |        |         | (10)          |        510   |
+| 3rd Fully Connected/ReLU|        |         | (50)          |       5050   |
+| 4th Fully Connected/ReLU|        |         | (10)          |        510   |
 | Final Fully Connected   |        |         | (1)           |         11   |
 | **Total Parameters**    |        |         |               |  1,595,511   |
 
-ReLU is used as the activation function to improve the non-linearity of the model. The weights of the network are trained to minimize the mean squared error between the predicted angle output and the steering angles of the images from the dataset.
+ReLU is used as the activation function to improve the non-linearity of the model. The weights of the network are trained to minimize the *mean squared error* between the predicted angle output and the steering angles from the dataset.
 
  Additional model parameters are summarized in the below table:
 
-| Parameter     | Value             | Description                              |
-|:---           |:---               |:---                                      |
-| Weights init  | he_uniform        | Most recommended in the discussion forums|
-| Optimizer     | Adam              | Most recommended in the discussion forums|
-| Learning Rate | 0.0001            | No adaptive learning rate                |
-| Batch size    | 32                |                                          |
-| Epochs        | 5                 | Accuracy was stable within 3 EPOCH       |
+| Parameter               | Value             | Description                              |
+|:---                     |:---               |:---                                      |
+| Weights Initialization  | he_uniform        | Most recommended in the discussion forums|
+| Optimizer               | Adam              | Most recommended in the discussion forums|
+| Learning Rate           | 0.0001            | No adaptive learning rate                |
+| Batch size              | 32                |                                          |
+| Epochs                  | 5                 | Accuracy was stable within 3 EPOCH       |
 
 The accuracy statistics of the network.
 
