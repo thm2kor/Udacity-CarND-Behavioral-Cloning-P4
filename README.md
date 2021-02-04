@@ -17,10 +17,10 @@
 Overview
 ---
 The objective of this project is to clone the driving behaviour of a human driver by training a deep neural network to predict the steering angle of a car for a given driving situation, which would enable a car to drive autonomously. Udacity provided a [simulator](https://github.com/udacity/self-driving-car-sim) which supports two modes:
-- A **training mode** where a human can steer a car around a pre-defined track. During this phase, an image frame representing the current driving environment and the respective steering position is continuously recorded.
-- An **autonomous mode** which uses a given deep neural network model to autonomously steer the vehicle.
+- A **training mode** where a human driver can steer a car around a pre-defined track. During this phase, an image frames representing the current driving environment and the respective steering position are continuously recorded.
+- An **autonomous mode** which uses predicted steering angles from a deep neural network model to autonomously steer the vehicle.
 
-**Note:** *Though the simulator records steering, throttle and brake positions, the current version of the model returns only the steering position. throttle position and brake requests are internally handled with the simulator*
+**Note:** *Though the simulator records steering, throttle and brake positions, the current version of the model returns only the steering position. Throttle position, brake requests and speed are internally handled within the simulator*
 
 ---
 ## Overview of Files
@@ -30,19 +30,18 @@ The objective of this project is to clone the driving behaviour of a human drive
 | [drive.py](./drive.py) | Module provided by Udacity for driving the car in autonomous mode. **File is adapted to pre-process the simulator images**. | *python drive.py 'relative_path_2_model_file'* |
 | [video.py](./video.py) | Module provided by Udacity to prepare videos. **No adaptations** | *python video.py folder_path_to_images --fps = FPS* |
 | [README.md](./README.md) | Writeup for this project. | |
-| [./models](./models) | Folder which contain the trained convolution neural network  |  |
+| [./models](./models) | Folder which contains the model file which holds the CNN architecture(layers and their connections), the weights values , the optimizer and the metrices  |  |
 | [./results](./results) | Folder which contain the result videos/gifs |  |
 | [./logs](./logs) | Folder which contain the diagnostics logs |  |
 
 ### Model creation
 The [model.py](./model.py) file contains the code for training and saving the convolutional neural network. The software pipeline in this file are organized as follows:
-1. Prepare and load the dataset
-The array `path_data_folders` holds the relative paths of all the datasets used in the project.  The default dataset is `./data/`.
+1. Prepare and load the dataset. The array `path_data_folders` holds the relative paths of all the datasets used in the project.  The default dataset is `./data/`.
 ```python
 # Minimal dataset for the model
 path_data_folders = ['./data/']
 ```
-To generalize the network for additional tracks, new training data was generated using the simulator which were then stored in separate folders. As recommended in the project instructions, I collected training data of the tracks in stages. I appended the new folders to the above array.
+To generalize the network for additional tracks, new training data was generated using the simulator which were then stored in separate folders. As recommended in the project instructions,  training data of the tracks were collected in stages. The respective folder are appended to the above array.
 ```python
 path_data_folders = ['./data/', './dataset_track1_2_mixed/', './dataset_t2_stage1/', \
 './dataset_t2_stage2/', './dataset_t2_stage3/', './dataset_t2_stage4/']
@@ -53,20 +52,20 @@ python model.py --PATH './dataset_t2_stage3/' --PATH './dataset_track1_2_mixed/'
 ```
 2. At this stage, data is still *lean*. Each data is a row from a CSV file with 7 columns containing three file paths to images (from centre, left and right cameras), the actual vehicle motion parameters like steering angle, throttle position, brake position and the speed of the vehicle.
 
-3. The data lines are split into training and validation sets with a ratio of 80:20
+3. The data lines are split into training and validation sets with a ratio of 80:20. This separation of dataset ensures the validation is done on a neutral set of data to avoid over-fitting of data.
 ```python
 # prepare the training and validation samples
 from sklearn.model_selection import train_test_split
 train_samples, validation_samples = train_test_split(lines, test_size=0.2)
 ```   
 
-4. In the next stage, memory intensive loading of images takes place. To efficiently handle the loading of large set of images, pre-processing and image augmentation, `generator functions` are used to load and return a required `batch_size` of images. Generator functions allows the function to behaves like an iterator with a lower memory usage.
+4. In the next stage, memory intensive loading of images takes place. To efficiently handle the loading of large set of images, pre-processing and image augmentation, `generator functions` are used to load and return a required `batch_size` of images. Generator functions allows the function to behave like an iterator with a lower memory usage.
 ```python
 train_generator = generator(train_samples, batch_size=batch_size)
 validation_generator = generator(validation_samples, batch_size=batch_size)
 ```   
 
-5. Instantiate a CNN Model (more details later), configure the model and train the model with the data.
+5. Next, a CNN Model (more details later) is instantiated, configured and trained with the training data.
 ```python
 ## Prepare the model
 from keras.optimizers import Adam
@@ -78,7 +77,7 @@ history_object = model.fit_generator(train_generator, steps_per_epoch=6*ceil(len
         epochs=epochs_count, verbose=1, callbacks=[checkpointer, logger])
 ```
 
-6. After the training is complete, the model is saved in the TensorFlow SavedModel (.h5) format. The function will serializes the CNN architecture(layers and their connections), the weights values , the optimizer and the metrices.
+6. After the training is complete, the model is saved in the TensorFlow SavedModel (.h5) format. The function will serialize the CNN architecture(layers and their connections), the weights values, the optimizer and the metrices.
 ```python
 #Save the model
 filename = './models/model_{}.h5'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
@@ -118,6 +117,7 @@ Since the data was generated automatically from a simulator, data sanity checks 
 ### Data Distribution
 In the next step, an explorative study of steering angle, which is the key prediction value, was performed. A distribution of the steering angles of Track-1 is shown below:
 ![steering angle distribution before correction][image1]
+
 A quick look at the plot shows that the steering angles corresponding to straight line driving is over represented. This could potentially bias my model towards steering angles around 0. I had two options to solve this problem:
 1. Correct the distribution by randomly removing the data which are over-represented.
 2. Augment the data with additional scenarios which would increase the count of under-represented data.
@@ -133,7 +133,7 @@ A quick look at the plot shows that the steering angles corresponding to straigh
 *The performance after distribution correction did not show any performance improvement for a wide range of ideal count of bins.* Therefore, this feature was **disabled**. But, Performance improvement was seen after artificially increasing the data count using data augmentation.
 
 #### Augmentation
-The data provided by Udacity contains only steering angles for the centre image. In order to effectively use the left and right images during training, an **offset of 0.15 is added to the left camera images and subtracted 0.15 from the right camera images** was added. The offset of 0.15 was derived based on trial-and-error method. With higher offset values (0.2 to 0.4), though the performance was good around the curves, the car wobbles more during straight line drive.
+The data provided by Udacity contains only steering angles for the centre image. In order to effectively use the left and right images during training, an **offset of 0.15 is added to the left camera images and subtracted 0.15 from the right camera images** was added. The offset of 0.15 was derived based on trial-and-error method. With higher offset values (0.2 to 0.4), though the performance was good around the curves, the car wobbles more during straight line drives.
 In addition, the images are flipped about their vertical axis with a negative steering angle. This would reduce the bias of left turns or right turns.
 ```python
 # flip the images with a -ve angle
@@ -146,7 +146,7 @@ A set of augmented images for a sample image is shown below:
 
 #### Pre-processing
 The following steps are performed on the images to efficiently train the model.
-1. The top portion of the images (approx. 140 pixels high) does not have any features which are necessary for the estimating the steering angle. Similarly the bottom frames (approx. 20 pixels high) of all the images capture the car hood, which again is not relevant for steering angle calculation. Both these portion of the images were cropped.
+1. The top portion of the images (20 pixels high) does not have any features which are necessary for the estimating the steering angle. Similarly the bottom frames (20 pixels high) of all the images capture the car hood, which again is not relevant for steering angle calculation. Both these portion of the images were cropped.
 2. NVIDIA model expects the input shape of the image to be 3x66x200. The images are resized to the target shape.
 3. Similar to the NVIDIA network architecture, the input image is converted to YUV colour space.
 
@@ -174,7 +174,7 @@ model = Sequential()
 model.add(Lambda(lambda x: x/127.5 - 1., input_shape=(66, 200, 3)))
 ```
 #### Model
-The network starts with a normalization layer followed by 5 convolutional layers. The first convolutional layer accepts an input of 3x66x200, has a filter of size 5x5 and stride of 2x2, resulting in output of 24x31x98. The second convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in and output of 36x14x47. The third convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in output of 48x5x22. The fourth convolutional layer applies a filter of 3x3 with stride of 1x1 (no stride), resulting in output of 64x3x20. The fifth and final convolutional layer then applies a filter of 3x3 with no stride, resulting in output of 64x1x18. The output is then flattened to produce a layer of 1152 neurons. The first fully-connected layer then results in output of 1164 neurons, followed by 100 neurons, 50 neurons, 10 neurons, and finally produces an output representing the steering angle. Two dropout layers with 50% probability is added after the first and second fully connected layers to avoid overfitting of the model.
+The network starts with a normalization layer followed by 5 convolutional layers. The first convolutional layer accepts an input of 66x200x3, has a filter of size 5x5 and stride of 2x2, resulting in output of 31x98x24. The second convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in and output of 14x47x36. The third convolutional layer then applies a filter of size 5x5 with stride of 2x2, resulting in output of 5x22x48. The fourth convolutional layer applies a filter of 3x3 with stride of 1x1 (no stride), resulting in output of 3x20x64. The fifth and final convolutional layer then applies a filter of 3x3 with no stride, resulting in output of 1x64x18. The output is then flattened to produce a layer of 1152 neurons. The first fully-connected layer then results in output of 1164 neurons, followed by 100 neurons, 50 neurons, 10 neurons, and finally produces an output representing the steering angle. Two dropout layers with 50% probability is added after the first and second fully connected layers to avoid overfitting of the model.
 
 The model can be summarized as below:
 
@@ -206,7 +206,7 @@ ReLU is used as the activation function to improve the non-linearity of the mode
 | Optimizer               | Adam              | Most recommended in the discussion forums|
 | Learning Rate           | 0.0001            | No adaptive learning rate                |
 | Batch size              | 32                |                                          |
-| Epochs                  | 5                 | Accuracy was stable within 3 EPOCH       |
+| Epochs                  | 5                 |                                          |
 
 The accuracy statistics of the network.
 
@@ -216,11 +216,11 @@ The accuracy statistics of the network.
 The model was trained and validated on different data sets to ensure that the model was not overfitting (code line 278-304). The model was tested by running it through the simulator and ensuring that the vehicle could stay on the track.
 
 ## Results
-With the adapted CNN model, the car was able to drive itself around the Track-1 without any problems. The results are available [here](./results/result_track1.mp4). The car stays within the road for speeds upto 20kmph. At speed higher than 20kmph, the steering angles needs to be filtered using first order low-pass filter. With the given scope of the project, I assumed that the drive.py should be adapted to alter the predicted values.
+With the adapted CNN model, the car was able to drive itself around the Track-1 without any problems. The results are available [here](./results/result_track1.mp4). The car stays within the road for speeds up-to 20kmph. At speed higher than 20kmph, the steering angles needs to be filtered using first order low-pass filter. With the given scope of the project, I assumed that the drive.py should be adapted to alter the predicted values.
 
 ![results_track1][image7]
 
 The Track-2 was more challenging. Without a joy-stick, I could manage to capture data only for a part of this track. The results on this stretch of track is encouraging me to further collect data. Since i had just 4 hours of GPU time remaining, I decided to stop collecting further data on Track-2. The results of the second track could be found [here](./results/result_track2.mp4).
 
 ## Summary
-It was a great learning experience. I have never played video games. So collecting data for this project was a crazy task. Like the previous project, the intuition behind selecting hyper parameters played a key role in fine-tuning the performance of the drive. More importantly, it is the amount of data and the availability of GPU time which determines the success of this project. In the next days, once I get my hands on more GPU time, I intend to collect more data and generalize the model further. I also want to experiment with the comma.ai model. Another interesting thing on my todo list is the visualization of the feature maps. Last by not least, the drive.py needs to be adapted to smoothen the steering angles using a first order low pass filter or better techniques. 
+It was a great learning experience. I have never played video games. So collecting data for this project was a crazy task. Like the previous project, the intuition behind selecting hyper parameters played a key role in fine-tuning the performance of the drive. More importantly, it is the amount of data and the availability of GPU time which determines the success of this project. In the next days, once I get my hands on more GPU time, I intend to collect more data and generalize the model further. I also want to experiment with the comma.ai model. Another interesting thing on my todo list is the visualization of the feature maps. Last by not least, the drive.py needs to be adapted to smoothen the steering angles using a first order low pass filter or better techniques.
