@@ -2,7 +2,7 @@
 
 [![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
-[![Project Graphic](http://img.youtube.com/vi/9sm-gIwpDpQ/0.jpg)](http://www.youtube.com/watch?v=9sm-gIwpDpQ "Behavioral Cloning")
+![Project Graphic](./results/results_track2.gif)
 
 [//]: # (Image References)
 
@@ -11,10 +11,12 @@
 [image3]: ./images/carnd-using-multiple-cameras.png "multiple cameras"
 [image4]: ./images/training_stats_20210203-143847-243593.png "accuracy"
 [image5]: ./images/sample_augmented_image.png "image augmentation"
-[image6]: ./images/sample_preprocessing.png "image preprocessing"
+[image6]: ./images/sample_preprocessing.png "image pre-processing"
+[image7]: ./results/result_track1.gif "results track 1"
+[image7]: ./results/result_track2.gif "results track 2"
 Overview
 ---
-The objective of this project is to clone a driving behavior of a human driver by training a deep neural network to model the steering angle of a car for a given driving situation, which enables a car to drive autonomously. Udacity provided a [simulator](https://github.com/udacity/self-driving-car-sim) which supports two modes:
+The objective of this project is to clone the driving behaviour of a human driver by training a deep neural network to predict the steering angle of a car for a given driving situation, which would enable a car to drive autonomously. Udacity provided a [simulator](https://github.com/udacity/self-driving-car-sim) which supports two modes:
 - A **training mode** where a human can steer a car around a pre-defined track. During this phase, an image frame representing the current driving environment and the respective steering position is continuously recorded.
 - An **autonomous mode** which uses a given deep neural network model to autonomously steer the vehicle.
 
@@ -49,7 +51,7 @@ Alternatively the datasets can be added as a command line argument.
 ```sh
 python model.py --PATH './dataset_t2_stage3/' --PATH './dataset_track1_2_mixed/'
 ```
-2. At this stage, data is still *lean*. Each data is a row from a CSV file with 7 columns containing three file paths to images (from center, left and right cameras), the actual vehicle motion parameters like steering angle, throttle position, brake position and the speed of the vehicle.
+2. At this stage, data is still *lean*. Each data is a row from a CSV file with 7 columns containing three file paths to images (from centre, left and right cameras), the actual vehicle motion parameters like steering angle, throttle position, brake position and the speed of the vehicle.
 
 3. The data lines are split into training and validation sets with a ratio of 80:20
 ```python
@@ -131,7 +133,7 @@ A quick look at the plot shows that the steering angles corresponding to straigh
 *The performance after distribution correction did not show any performance improvement for a wide range of ideal count of bins.* Therefore, this feature was **disabled**. But, Performance improvement was seen after artificially increasing the data count using data augmentation.
 
 #### Augmentation
-The data provided by Udacity contains only steering angles for the center image. In order to effectively use the left and right images during training, an **offset of 0.15 is added to the left camera images and subtracted 0.15 from the right camera images** was added. The offset of 0.15 was derived based on trial-and-error method. With higher offset values (0.2 to 0.4), though the performance was good around the curves, the car wobbles more during straight line drive.
+The data provided by Udacity contains only steering angles for the centre image. In order to effectively use the left and right images during training, an **offset of 0.15 is added to the left camera images and subtracted 0.15 from the right camera images** was added. The offset of 0.15 was derived based on trial-and-error method. With higher offset values (0.2 to 0.4), though the performance was good around the curves, the car wobbles more during straight line drive.
 In addition, the images are flipped about their vertical axis with a negative steering angle. This would reduce the bias of left turns or right turns.
 ```python
 # flip the images with a -ve angle
@@ -142,11 +144,11 @@ A set of augmented images for a sample image is shown below:
 
 ![augmented_images][image5]
 
-### Pre-processing
+#### Pre-processing
 The following steps are performed on the images to efficiently train the model.
 1. The top portion of the images (approx. 140 pixels high) does not have any features which are necessary for the estimating the steering angle. Similarly the bottom frames (approx. 20 pixels high) of all the images capture the car hood, which again is not relevant for steering angle calculation. Both these portion of the images were cropped.
 2. NVIDIA model expects the input shape of the image to be 3x66x200. The images are resized to the target shape.
-3. Similar to the NVIDIA network architecture, the input image is converted to YUV color space.
+3. Similar to the NVIDIA network architecture, the input image is converted to YUV colour space.
 
 ```python
 def pre_process(image):
@@ -209,3 +211,16 @@ ReLU is used as the activation function to improve the non-linearity of the mode
 The accuracy statistics of the network.
 
 ![accuracy_statistics][image4]
+
+### Validation
+The model was trained and validated on different data sets to ensure that the model was not overfitting (code line 278-304). The model was tested by running it through the simulator and ensuring that the vehicle could stay on the track.
+
+## Results
+With the adapted CNN model, the car was able to drive itself around the Track-1 without any problems. The results are available [here](./results/result_track1.mp4). The car stays within the road for speeds upto 20kmph. At speed higher than 20kmph, the steering angles needs to be filtered using first order low-pass filter. With the given scope of the project, I assumed that the drive.py should be adapted to alter the predicted values.
+
+![results_track1][image7]
+
+The Track-2 was more challenging. Without a joy-stick, I could manage to capture data only for a part of this track. The results on this stretch of track is encouraging me to further collect data. Since i had just 4 hours of GPU time remaining, I decided to stop collecting further data on Track-2. The results of the second track could be found [here](./results/result_track2.mp4).
+
+## Summary
+It was a great learning experience. I have never played video games. So collecting data for this project was a crazy task. Like the previous project, the intuition behind selecting hyper parameters played a key role in fine-tuning the performance of the drive. More importantly, it is the amount of data and the availability of GPU time which determines the success of this project. In the next days, once I get my hands on more GPU time, I intend to collect more data and generalize the model further. I also want to experiment with the comma.ai model. Another interesting thing on my todo list is the visualization of the feature maps. Last by not least, the drive.py needs to be adapted to smoothen the steering angles using a first order low pass filter or better techniques. 

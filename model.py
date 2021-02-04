@@ -160,7 +160,7 @@ def pre_process(image):
     # resize image to fit the input shape of the model
     result = cv2.resize(result, dsize=(200, 66))
     # return the result compatible to the nvidia model
-    result = cv2.cvtColor(result, cv2.COLOR_BGR2YUV)
+    result = cv2.cvtColor(result, cv2.COLOR_RGB2YUV)
     return result.astype('float32')
 
 def get_image(image_path):
@@ -240,7 +240,7 @@ def correct_distribution (lines):
     than the the average, then randomly remove the items only for that bin
     """
     angles = np.float32(np.array(lines)[:, 3])
-    num_bins = 25
+    num_bins = 21
     
     hist, bins = plot_histogram( num_bins, angles, 'Histogram - before distribution correction')
     #correct the distribution
